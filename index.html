@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070b10">
 <meta name="description" content="Simulador de decisiones sobre agentes de IA en ciberseguridad. Eres el jefe de seguridad de Carvana durante un turno de 5 minutos.">
-<title>Turno de noche en Carvana</title>
+<title>Turno de noche en Carvana · Agentes de IA en ciberseguridad</title>
 <style>
   :root {
     --bg: #070b10;
@@ -157,8 +157,25 @@
 
   /* Portada */
   .kicker { font-family: var(--mono); color: var(--green); font-size: .85rem; letter-spacing: .15em; text-transform: uppercase; }
-  .title { font-size: 2.2rem; margin: .2em 0 .3em; }
-  .lead { font-size: 1.2rem; color: var(--text); max-width: 28ch; margin: 0 auto 1em; }
+  .title { font-size: 2.2rem; margin: .2em 0 .25em; }
+  .subtitulo {
+    display: inline-block; margin: 0 auto 1em; padding: 6px 14px;
+    color: var(--green); font-weight: 600; font-size: 1.05rem; line-height: 1.35;
+    border: 1px solid rgba(61, 220, 132, .45); border-radius: 14px; max-width: 30ch; background: rgba(61, 220, 132, .08);
+  }
+  .lead { font-size: 1.2rem; color: var(--text); max-width: 28ch; margin: 0 auto .6em; }
+  .contexto {
+    max-width: 34ch; margin: 0 auto 1.3em; padding: 10px 14px;
+    color: var(--muted); font-size: 1rem; line-height: 1.45;
+    border: 1px solid var(--line); border-radius: 12px; background: rgba(15, 23, 32, .75);
+  }
+  .contexto b { color: var(--text); }
+  .caso-real {
+    margin-top: 12px; padding: 10px 14px 4px;
+    border-left: 3px solid var(--neutral); border-radius: 8px; background: var(--panel-2);
+  }
+  .caso-tag { font-family: var(--mono); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--neutral); }
+  .caso-real p { margin-top: .3em; }
   .radar {
     width: 120px; height: 120px; border-radius: 50%;
     border: 2px solid rgba(61, 220, 132, .5);
@@ -511,6 +528,8 @@
     main#stage { max-width: 820px; padding: 32px 24px; }
     .title { font-size: 3rem; }
     .lead { font-size: 1.35rem; }
+    .contexto { max-width: 44ch; font-size: 1.05rem; }
+    .subtitulo { max-width: none; font-size: 1.2rem; }
     .card { padding: 26px 28px; }
     .opts.two { grid-template-columns: 1fr 1fr; }
     .opts.three { grid-template-columns: repeat(3, 1fr); }
@@ -598,9 +617,14 @@ const MI_PREGUNTA = `¿Cómo será el impacto real en los trabajadores de entrad
 
 const AUTOR = `Mateo`;
 const NOMBRE_JUEGO = `Turno de noche en Carvana`;
+const SUBTITULO_JUEGO = `Un juego sobre agentes de IA en ciberseguridad`;
+
+/* Portada: quién eres y qué es Carvana (para quien no la conoce) */
+const PORTADA_LEAD = `Eres el jefe de seguridad de Carvana. Tienes 5 minutos.`;
+const PORTADA_CONTEXTO = `<b>Carvana</b> es una empresa estadounidense de venta de autos online. Es un caso real: ya usa un agente de IA para vigilar su seguridad.`;
 
 /* Pantalla "Tu equipo esta noche" (antes de la primera alerta) */
-const EQUIPO_TITULO = `Tu equipo esta noche`;
+const EQUIPO_TITULO = `Tu equipo esta noche en Carvana`;
 const EQUIPO_AGENTE = `<b>Socrates, el agente de IA.</b> Rápido y barato.`;
 const EQUIPO_JUNIOR = `<b>Un analista junior recién contratado.</b> Más lento, pero aprende con cada alerta que revisa.`;
 const EQUIPO_CIERRE = `Cada alerta la resuelve uno de los dos. Tú decides.`;
@@ -697,7 +721,8 @@ const INTRO = [
     ico: '🤖',
     titulo: '¿Qué es un agente de IA?',
     html: `<p>Un programa que no solo responde: actúa por su cuenta, revisa alertas y toma decisiones.</p>
-      <p>Carvana, empresa estadounidense de venta de autos online, usa a Socrates, el agente de Torq. Según Carvana, hoy resuelve el 100% de sus alertas de Nivel 1 y Nivel 2.</p>`
+      <div class="caso-real"><span class="caso-tag">📍 Caso real</span>
+      <p>Carvana, empresa estadounidense de venta de autos online, usa a Socrates, el agente de Torq. Según Carvana, hoy resuelve el 100% de sus alertas de Nivel 1 y Nivel 2.</p></div>`
   }
 ];
 
@@ -918,7 +943,9 @@ function portada() {
       <div class="radar" aria-hidden="true"></div>
       <div class="kicker">Centro de seguridad · Turno de noche</div>
       <h1 class="title">${NOMBRE_JUEGO}</h1>
-      <p class="lead">Eres el jefe de seguridad de Carvana. Tienes 5 minutos.</p>
+      <p class="subtitulo"><span aria-hidden="true">🤖🛡️</span> ${SUBTITULO_JUEGO}</p>
+      <p class="lead">${PORTADA_LEAD}</p>
+      <p class="contexto">${PORTADA_CONTEXTO}</p>
       <button class="btn primary" data-key="next">Empezar</button>
     </section>`, 'portada', 'Inicio');
   bind('next', empezar);
