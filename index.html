@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b10">
+<meta name="description" content="Simulador de decisiones sobre agentes de IA en ciberseguridad. Eres el jefe de seguridad de Carvana durante un turno de 5 minutos.">
+<title>Turno de noche en Carvana</title>
+<style>
+  :root {
+    --bg: #070b10;
+    --panel: #0f1720;
+    --panel-2: #152230;
+    --line: #26394d;
+    --text: #eef4f8;
+    --muted: #b3c4d1;
+    --green: #3ddc84;
+    --yellow: #ffd23f;
+    --red: #ff5a5f;
+    --neutral: #7fd3f7;
+    --radius: 16px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(rgba(127, 211, 247, .045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(127, 211, 247, .045) 1px, transparent 1px);
+    background-size: 28px 28px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 17px;
+    line-height: 1.45;
+    transition: background-color .6s ease;
+  }
+  body.alarm {
+    --bg: #160406;
+    --panel: #22080b;
+    --panel-2: #2d0c10;
+    --line: #5a1b21;
+    background-image:
+      linear-gradient(rgba(255, 90, 95, .07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 90, 95, .07) 1px, transparent 1px);
+  }
+  button { font: inherit; color: inherit; }
+  h1, h2, h3 { line-height: 1.15; margin: 0 0 .5em; }
+
+  /* ---------- Barra superior ---------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(7, 11, 16, .92);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+    padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
+  }
+  body.alarm .topbar { background: rgba(22, 4, 6, .94); border-bottom-color: var(--red); }
+  .topbar-inner { max-width: 1000px; margin: 0 auto; }
+  .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .clock-wrap { display: flex; align-items: baseline; gap: 8px; }
+  .clock-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .clock {
+    font-family: var(--mono);
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--green);
+    font-variant-numeric: tabular-nums;
+    transition: color .3s;
+  }
+  .clock.warn { color: var(--yellow); }
+  .clock.danger { color: var(--red); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .55; } }
+  .phase {
+    font-size: .8rem;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .meters[hidden] { display: none; }
+  .meter {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 6px 8px;
+    min-width: 0;
+  }
+  .meter.bump { animation: bump .5s ease; }
+  @keyframes bump { 40% { transform: scale(1.06); border-color: var(--yellow); } }
+  .m-ico { font-size: 1.1rem; }
+  .m-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .m-label { font-size: .68rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-label .full { display: none; }
+  .m-val { font-family: var(--mono); font-weight: 700; font-size: .95rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .m-bar { height: 5px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .m-bar i { display: block; height: 100%; width: 0; background: var(--green); transition: width .8s ease; }
+  .delta {
+    position: absolute;
+    right: 8px;
+    top: -4px;
+    font-family: var(--mono);
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--yellow);
+    pointer-events: none;
+    animation: floatUp 1.4s ease forwards;
+  }
+  @keyframes floatUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-18px); } }
+
+  /* ---------- Escenario ---------- */
+  main#stage {
+    flex: 1;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px 16px 24px;
+    display: flex;
+    flex-direction: column;
+  }
+  .screen { display: flex; flex-direction: column; gap: 14px; flex: 1; animation: fadeIn .35s ease; }
+  .screen.center { justify-content: center; text-align: center; align-items: center; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .pop { animation: pop .4s cubic-bezier(.2, .9, .3, 1.2); }
+  @keyframes pop { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+  .shake { animation: pop .4s ease, shake .6s ease .4s 2; }
+  @keyframes shake {
+    20% { transform: translateX(-6px) rotate(-.5deg); }
+    40% { transform: translateX(6px) rotate(.5deg); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+
+  .step-label { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  }
+
+  /* Portada */
+  .kicker { font-family: var(--mono); color: var(--green); font-size: .85rem; letter-spacing: .15em; text-transform: uppercase; }
+  .title { font-size: 2.2rem; margin: .2em 0 .3em; }
+  .lead { font-size: 1.2rem; color: var(--text); max-width: 28ch; margin: 0 auto 1em; }
+  .radar {
+    width: 120px; height: 120px; border-radius: 50%;
+    border: 2px solid rgba(61, 220, 132, .5);
+    background:
+      radial-gradient(circle, transparent 38%, rgba(61, 220, 132, .25) 39%, transparent 41%),
+      radial-gradient(circle, transparent 68%, rgba(61, 220, 132, .25) 69%, transparent 71%),
+      conic-gradient(from 0deg, rgba(61, 220, 132, .55), transparent 25%);
+    animation: spin 3s linear infinite;
+    margin-bottom: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Botones */
+  .btn {
+    min-height: 52px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    padding: 12px 22px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform .1s, border-color .2s, background .2s;
+    touch-action: manipulation;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--green); color: #04140b; border-color: var(--green); min-width: 200px; }
+  .btn.next { align-self: stretch; margin-top: auto; }
+  .btn .auto {
+    position: absolute; left: 0; bottom: 0; height: 4px; width: 0;
+    background: var(--neutral); opacity: .8;
+    animation-name: fill; animation-timing-function: linear; animation-fill-mode: forwards;
+  }
+  @keyframes fill { to { width: 100%; } }
+  .btn:focus-visible, .opt:focus-visible, .tray-item:focus-visible { outline: 3px solid var(--neutral); outline-offset: 2px; }
+
+  /* Intro */
+  .intro-ico { font-size: 3.2rem; text-align: center; }
+  .intro-card h2 { font-size: 1.5rem; text-align: center; }
+  .intro-card p { font-size: 1.1rem; margin: .5em 0; }
+  .dots { display: flex; gap: 6px; justify-content: center; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .dots i.on { background: var(--green); }
+  .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .level {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: .88rem;
+    line-height: 1.35;
+  }
+  .level .l-ico { font-size: 1.8rem; display: block; margin-bottom: 4px; }
+  .level b { display: block; color: var(--green); margin-bottom: 2px; }
+  .level:nth-child(2) b { color: var(--yellow); }
+  .level:nth-child(3) b { color: var(--red); }
+
+  /* Alertas */
+  .alert-top { display: flex; justify-content: space-between; align-items: center; }
+  .badge {
+    display: inline-block;
+    font-size: .78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+  }
+  .badge.n1 { color: var(--green); }
+  .badge.n2 { color: var(--yellow); }
+  .badge.red { color: var(--red); }
+  .mini {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .mini.warn { color: var(--yellow); }
+  .mini.danger { color: var(--red); }
+  .alert-ico { font-size: 3.4rem; text-align: center; margin: 6px 0 2px; }
+  .alert-text { font-size: 1.2rem; font-weight: 600; text-align: center; margin: 6px 0 14px; }
+  .minibar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .minibar i { display: block; height: 100%; width: 100%; background: var(--neutral); transition: width .1s linear, background .3s; }
+  .minibar i.warn { background: var(--yellow); }
+  .minibar i.danger { background: var(--red); }
+  .ask { margin: 4px 0 0; font-weight: 700; text-align: center; color: var(--muted); }
+
+  .opts { display: grid; gap: 10px; }
+  .opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 68px;
+    text-align: left;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: transform .1s, border-color .2s, background .2s;
+    touch-action: manipulation;
+  }
+  .opt:active { transform: scale(.98); }
+  .opt-ico { font-size: 1.9rem; flex: none; }
+  .opt-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  .opt-title { font-weight: 700; font-size: 1.08rem; }
+  .opt-desc { font-size: .92rem; color: var(--text); margin: 1px 0 2px; }
+  .opt-sub { font-size: .8rem; color: var(--muted); font-family: var(--mono); }
+
+  /* Tu equipo esta noche */
+  .team { display: grid; gap: 10px; margin: 6px 0 10px; }
+  .member {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .member p { margin: 0; font-size: 1.02rem; }
+  .member-ico { font-size: 2.2rem; flex: none; }
+  .team-close { text-align: center; font-weight: 700; margin: 0; }
+  .team-hint { text-align: center; color: var(--yellow); margin: 8px 0 0; font-size: .98rem; }
+
+  /* Marca de meta en las barras de experiencia */
+  .m-bar, .exp-track { position: relative; }
+  .m-bar::after, .exp-track::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: var(--umbral, 50%);
+    width: 2px;
+    background: var(--yellow);
+  }
+  .goal { color: var(--yellow) !important; }
+  .ready { color: var(--green); font-weight: 700; margin: 8px 0 0; }
+  .extra-good { color: var(--green); font-weight: 700; }
+  .cierre-line {
+    background: var(--panel-2);
+    border-left: 4px solid var(--yellow);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-weight: 700;
+  }
+  .cierre-line.good { border-left-color: var(--green); }
+
+  /* Experiencia en la tarjeta de resultado */
+  .exp-card { margin-top: 12px; }
+  .exp-line { display: flex; justify-content: space-between; gap: 8px; font-size: .92rem; color: var(--muted); }
+  .exp-line b { font-family: var(--mono); color: var(--green); }
+  .exp-track { height: 10px; background: var(--panel-2); border-radius: 5px; overflow: hidden; margin-top: 6px; }
+  .exp-track i { display: block; height: 100%; background: var(--green); transition: width 1s ease .3s; }
+  .exp-card small { display: block; color: var(--muted); margin-top: 4px; }
+  kbd {
+    display: none;
+    font-family: var(--mono);
+    font-size: .8rem;
+    border: 1px solid var(--line);
+    border-bottom-width: 3px;
+    border-radius: 6px;
+    padding: 1px 7px;
+    color: var(--muted);
+  }
+
+  /* Tarjeta de resultado */
+  .feedback { border-left: 5px solid var(--neutral); }
+  .feedback.agente { border-left-color: var(--neutral); }
+  .feedback.junior { border-left-color: var(--green); }
+  .feedback.warnc { border-left-color: var(--yellow); }
+  .feedback.bad { border-left-color: var(--red); }
+  .feedback.good { border-left-color: var(--green); }
+  .fb-head { display: flex; align-items: center; gap: 10px; font-size: 1.6rem; }
+  .fb-head span { font-size: 1rem; font-weight: 700; }
+  .fb-msg { font-size: 1.1rem; margin: 10px 0; }
+  .wait { color: var(--yellow); font-weight: 700; margin: 0 0 6px; }
+  .lesson {
+    background: var(--panel-2);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 1.02rem;
+  }
+  .lesson-label {
+    display: block;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .big-num { font-family: var(--mono); font-size: 1.6rem; font-weight: 700; color: var(--yellow); }
+
+  /* Alerta ambigua */
+  .ambig-card { border-color: var(--red); box-shadow: 0 0 0 1px var(--red), 0 0 40px rgba(255, 90, 95, .25); }
+  .ambig-text { font-size: 1.2rem; font-weight: 600; margin: 12px 0; }
+  .ambig-text .hora { color: var(--red); }
+  .socrates {
+    background: var(--panel-2);
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-family: var(--mono);
+    font-size: .95rem;
+  }
+  .result-title { font-size: 1.35rem; font-weight: 800; margin: 4px 0 8px; }
+  .result-title.good { color: var(--green); }
+  .result-title.warnc { color: var(--yellow); }
+  .result-title.bad { color: var(--red); }
+  .quote { font-size: 1.2rem; font-weight: 600; line-height: 1.5; }
+  .senior-q { color: var(--yellow); font-weight: 700; }
+
+  /* Acto 2 */
+  .pyme-hud { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; }
+  .hud-box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+  }
+  .hud-box span { font-family: var(--mono); font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .hud-box small { color: var(--muted); font-size: .78rem; }
+  .hud-box.good span { color: var(--green); }
+  .hud-box.bad span { color: var(--red); }
+  .hud-box.timer { min-width: 88px; }
+  .hint { text-align: center; color: var(--muted); margin: 0; font-size: .95rem; }
+  .tray {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    align-content: start;
+    max-height: 56vh;
+    max-height: 56dvh;
+    overflow-y: auto;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(15, 23, 32, .6);
+    transition: border-color .3s;
+  }
+  .tray.full { border-color: var(--red); }
+  .tray-item {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 56px;
+    text-align: left;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--red);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: .88rem;
+    cursor: pointer;
+    animation: drop .3s ease;
+    touch-action: manipulation;
+  }
+  .tray-item .t-ico { font-size: 1.3rem; }
+  .tray-item .t-txt { display: flex; flex-direction: column; min-width: 0; }
+  .tray-item .t-txt b { line-height: 1.2; }
+  .tray-item .t-txt small { color: var(--muted); font-family: var(--mono); }
+  .tray.busy .tray-item:not(.reviewing) { opacity: .45; cursor: not-allowed; }
+  .tray-item.reviewing { border-left-color: var(--yellow); }
+  .tray-item .prog {
+    position: absolute; left: 0; bottom: 0; height: 4px; width: 0;
+    background: var(--yellow);
+    animation-name: fill; animation-timing-function: linear; animation-fill-mode: forwards;
+  }
+  @keyframes drop { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
+  .pyme-result { display: flex; justify-content: center; gap: 18px; font-size: 1.05rem; margin-bottom: 10px; flex-wrap: wrap; }
+  .pyme-result b { font-family: var(--mono); font-size: 1.5rem; }
+  .pyme-result .g { color: var(--green); }
+  .pyme-result .r { color: var(--red); }
+  .strong { font-weight: 800; font-size: 1.15rem; }
+
+  /* Cierre */
+  .closing { gap: 18px; }
+  .closing h2 { font-size: 1.35rem; margin-bottom: .6em; }
+  .timeout-banner {
+    background: rgba(255, 210, 63, .12);
+    border: 1px solid var(--yellow);
+    color: var(--yellow);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-weight: 700;
+  }
+  .path-tag {
+    display: inline-block;
+    font-weight: 800;
+    font-size: 1.15rem;
+    padding: 6px 14px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .path-tag.todo { background: rgba(127, 211, 247, .15); color: var(--neutral); }
+  .path-tag.equilibrio { background: rgba(61, 220, 132, .15); color: var(--green); }
+  .path-tag.personas { background: rgba(255, 210, 63, .15); color: var(--yellow); }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+  .stat { background: var(--panel-2); border-radius: 12px; padding: 10px 12px; }
+  .stat.wide { grid-column: 1 / -1; }
+  .stat b.txt { font-family: var(--font); font-size: 1.05rem; }
+  .stat small { display: block; color: var(--muted); font-size: .78rem; }
+  .stat b { font-family: var(--mono); font-size: 1.15rem; }
+  .stat b.good { color: var(--green); }
+  .stat b.warnc { color: var(--yellow); }
+  .stat b.bad { color: var(--red); }
+  .decisions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .decision {
+    display: flex; align-items: center; gap: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 1rem;
+  }
+  .real-list { margin: 0; padding-left: 1.1em; }
+  .real-list li { margin-bottom: .5em; }
+  blockquote {
+    margin: 0;
+    padding: 4px 0 4px 14px;
+    border-left: 4px solid var(--green);
+    font-size: 1.08rem;
+  }
+  .author { color: var(--muted); margin-top: 6px; font-size: .95rem; }
+  .sources { font-size: .78rem; color: var(--muted); }
+
+  footer.foot {
+    text-align: center;
+    font-size: .75rem;
+    color: var(--muted);
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    opacity: .8;
+  }
+
+  /* ---------- Computador ---------- */
+  @media (min-width: 860px) {
+    body { font-size: 18px; }
+    .topbar { padding: 10px 24px; }
+    .topbar-inner { display: flex; align-items: center; gap: 20px; }
+    .topbar-row { flex: none; gap: 16px; }
+    .meters { flex: 1; margin-top: 0; }
+    .m-label .full { display: inline; }
+    .m-label .short { display: none; }
+    .clock { font-size: 2rem; }
+    main#stage { max-width: 820px; padding: 32px 24px; }
+    .title { font-size: 3rem; }
+    .lead { font-size: 1.35rem; }
+    .card { padding: 26px 28px; }
+    .opts.two { grid-template-columns: 1fr 1fr; }
+    .opts.three { grid-template-columns: repeat(3, 1fr); }
+    .opts.three .opt { flex-direction: column; text-align: center; justify-content: center; min-height: 120px; }
+    .opts.three .opt-main { align-items: center; }
+    .alert-text, .ambig-text { font-size: 1.35rem; }
+    .team { grid-template-columns: 1fr 1fr; }
+    .level { font-size: .98rem; padding: 16px 12px; }
+    .tray { grid-template-columns: repeat(4, 1fr); max-height: 52vh; }
+    .stats { grid-template-columns: repeat(3, 1fr); }
+    .stat.wide { grid-column: auto; }
+    .stat.wide:last-child { grid-column: 1 / -1; }
+    .screen { justify-content: center; }
+    .screen.closing { justify-content: flex-start; }
+    .btn.next { align-self: center; min-width: 260px; margin-top: 8px; }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    kbd { display: inline-block; }
+    .opt:hover { border-color: var(--neutral); background: #1a2a3a; }
+    body.alarm .opt:hover { background: #3a1015; border-color: var(--red); }
+    .btn:hover { border-color: var(--neutral); }
+    .btn.primary:hover { filter: brightness(1.08); }
+    .tray-item:hover { border-color: var(--yellow); }
+  }
+  @media (max-width: 360px) {
+    body { font-size: 16px; }
+    .level { font-size: .8rem; padding: 8px 5px; }
+    .m-ico { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    .btn .auto, .tray-item .prog { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-row">
+      <div class="clock-wrap">
+        <span class="clock-label">Turno</span>
+        <span id="clock" class="clock" role="timer" aria-label="Tiempo restante">5:00</span>
+      </div>
+      <div id="phase" class="phase">Inicio</div>
+    </div>
+    <div class="meters" id="meters" hidden>
+      <div class="meter" id="m-tiempo">
+        <span class="m-ico">⏱</span>
+        <div class="m-body">
+          <span class="m-label"><span class="full">Tiempo de respuesta</span><span class="short">Tiempo</span></span>
+          <span class="m-val">0 min</span>
+        </div>
+      </div>
+      <div class="meter" id="m-costo">
+        <span class="m-ico">💰</span>
+        <div class="m-body">
+          <span class="m-label"><span class="full">Costo del turno</span><span class="short">Costo</span></span>
+          <span class="m-val">$0</span>
+        </div>
+      </div>
+      <div class="meter" id="m-exp">
+        <span class="m-ico">🎓</span>
+        <div class="m-body">
+          <span class="m-label"><span class="full">Experiencia del junior</span><span class="short">Junior</span></span>
+          <span class="m-val">0</span>
+          <div class="m-bar"><i></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="stage"></main>
+
+<footer class="foot">Situaciones ficticias inspiradas en un caso real. Proyecto para EAA2072, UC.</footer>
+
+<script>
+/* =====================================================================
+   TEXTOS DEL AUTOR — edita libremente estas constantes
+   ===================================================================== */
+const MI_POSTURA = `En mi opinión, el uso de agentes de IA será muy beneficioso, porque permitirá que las empresas mejoren sus sistemas de seguridad. Pero las grandes empresas quedarán protegidas ante vulnerabilidades de seguridad mientras las pymes no, lo cual genera una gran brecha. Por eso el desafío no es solo adaptar las empresas actuales a un sistema agéntico, sino que las nuevas pymes nazcan desde un inicio con esta arquitectura.`;
+
+const MI_PREGUNTA = `¿Cómo será el impacto real en los trabajadores de entrada, si los puestos donde antes aprendían terminan siendo reemplazados por completo?`;
+
+const AUTOR = `Mateo`;
+const NOMBRE_JUEGO = `Turno de noche en Carvana`;
+
+/* Pantalla "Tu equipo esta noche" (antes de la primera alerta) */
+const EQUIPO_TITULO = `Tu equipo esta noche`;
+const EQUIPO_AGENTE = `<b>Socrates, el agente de IA.</b> Rápido y barato.`;
+const EQUIPO_JUNIOR = `<b>Un analista junior recién contratado.</b> Más lento, pero aprende con cada alerta que revisa.`;
+const EQUIPO_CIERRE = `Cada alerta la resuelve uno de los dos. Tú decides.`;
+const EQUIPO_PISTA = `Lo que el junior aprenda hoy podría servirte más tarde.`;
+
+/* Pistas sobre el valor del junior */
+const META_EXP = `Listo para alertas difíciles`;                                   // etiqueta de la marca amarilla en la barra 🎓
+const MSG_JUNIOR_LISTO = `🎓 Tu junior ya puede enfrentar alertas más difíciles.`; // al alcanzar el umbral
+const MSG_AMBIG_JUNIOR_BIEN = `Lo aprendió en la alerta 5.`;
+const msgAmbigJuniorMal = (exp, umbral) => `Tu junior tenía ${exp} de experiencia y necesitaba ${umbral}.`;
+const msgCierreFaltan = n => `Con ${n} ${n === 1 ? 'alerta' : 'alertas'} más para el junior, habría contenido el ataque.`;
+const MSG_CIERRE_LISTO_SIN_USAR = `Tu junior estaba listo para contener el ataque, pero no lo enviaste.`;
+const MSG_CIERRE_LISTO_USADO = `Lo que invertiste en tu junior fue lo que contuvo el ataque.`;
+
+/* Descripción corta bajo cada botón del Acto 1 */
+const DESC_AGENTE = `Rápido y barato. Nadie aprende.`;
+const DESC_JUNIOR = `Más lento y caro. El junior aprende.`;
+
+/* Frase que explica el costo de cada camino (se muestra en el cierre) */
+const TEXTOS_CAMINO = {
+  todo:       `Fuiste rápido y barato. Pero tu junior no aprendió nada, y cuando llegó la alerta difícil nadie en el equipo estaba preparado.`,
+  equilibrio: `Pagaste algo más de tiempo y dinero para que tu junior aprendiera. Aun así, cada alerta que cerró el agente fue una lección que nadie vio.`,
+  personas:   `Tu junior aprendió mucho, pero las alertas se acumularon. Sin agentes, el equipo no alcanza a cubrir todo.`
+};
+
+/* =====================================================================
+   BALANCE — números fáciles de ajustar
+   (tiempo = minutos simulados del turno, costo = dólares)
+   ===================================================================== */
+const BALANCE = {
+  DURACION_TOTAL_SEG: 300,          // contador global: 5:00
+  CORTE_CIERRE_SEG: 45,             // al llegar a 0:45 salta al cierre
+
+  AGENTE: { tiempo: 1,  costo: 10, exp: 0 },   // 🤖 Agente IA
+  JUNIOR: { tiempo: 15, costo: 40, exp: 25 },  // 👩‍💻 Junior + agente
+  EXP_MAX: 100,
+
+  EQUIPO_SEG: 10,                   // pantalla "Tu equipo esta noche" (avanza sola)
+  MINICONTADOR_SEG: 20,             // tiempo para decidir cada alerta
+  ESPERA_SIN_DECIDIR_MIN: 10,       // minutos extra si la alerta "queda esperando"
+  TARJETA_SEG: 8,                   // tarjeta con la lección: avanza sola a los 8 s (o al tocar Siguiente)
+  TARJETA_SIN_DECIDIR_SEG: 3.5,     // si el jugador no decidió, la tarjeta dura menos
+
+  PENALIZACION_DESDE_JUNIOR: 4,     // si eliges junior 4 o 5 veces...
+  PENALIZACION_TIEMPO_MIN: 30,      // ...+30 min de tiempo de respuesta
+  PENALIZACION_SEG: 4,
+
+  UMBRAL_EXP_AMBIGUA: 50,           // experiencia mínima para que el junior resuelva la ambigua
+  AMBIGUA: {
+    agente:     { tiempo: 120, costo: 0 },
+    juniorBien: { tiempo: 20,  costo: 0 },
+    juniorMal:  { tiempo: 90,  costo: 0 },
+    senior:     { tiempo: 60,  costo: 150 }
+  },
+  AMBIGUA_RESULTADO_SEG: 9,
+  ESCALERA_SEG: 10,
+
+  PYME_ENTRADA_SEG: 8,
+  PYME_DURACION_SEG: 30,
+  PYME_REVISION_SEG: 2,
+  PYME_INTERVALO_INICIAL_SEG: 2,    // primera alerta cada 2 s...
+  PYME_ACELERACION: 0.9,            // ...cada intervalo es 10% más corto...
+  PYME_INTERVALO_MIN_SEG: 0.5,      // ...hasta un mínimo de 0,5 s
+  PYME_MENSAJE_SEG: 12,
+
+  INTRO_AUTO_SEG: 11,               // las pantallas de intro avanzan solas
+
+  CAMINO_TODO_MAX: 1,               // 0–1 decisiones junior: "Automatizaste todo"
+  CAMINO_EQUILIBRIO_MAX: 3,         // 2–3: "Buscaste un equilibrio"; 4–5: "Confiaste en las personas"
+
+  SONIDO: true,
+  VIBRACION: true
+};
+
+/* =====================================================================
+   CONTENIDO DE LA SPEC
+   ===================================================================== */
+const INTRO = [
+  {
+    ico: '🖥️',
+    titulo: '¿Qué es un SOC?',
+    html: `<p>El Centro de Operaciones de Seguridad es como la sala de guardia de una empresa: vigila las 24 horas que nadie entre sin permiso. Cada día recibe miles de alertas, y la mayoría son falsas alarmas.</p>`
+  },
+  {
+    ico: '🪜',
+    titulo: 'Los tres niveles',
+    html: `<div class="levels">
+      <div class="level"><span class="l-ico">🔎</span><b>Nivel 1</b>revisa alertas y descarta falsas alarmas (aquí empiezan los nuevos).</div>
+      <div class="level"><span class="l-ico">🛡️</span><b>Nivel 2</b>investiga lo sospechoso y lo contiene.</div>
+      <div class="level"><span class="l-ico">🧠</span><b>Nivel 3</b>los más expertos, resuelve los ataques más graves.</div>
+    </div>`
+  },
+  {
+    ico: '🤖',
+    titulo: '¿Qué es un agente de IA?',
+    html: `<p>Un programa que no solo responde: actúa por su cuenta, revisa alertas y toma decisiones.</p>
+      <p>Carvana, empresa estadounidense de venta de autos online, usa a Socrates, el agente de Torq. Según Carvana, hoy resuelve el 100% de sus alertas de Nivel 1 y Nivel 2.</p>`
+  }
+];
+
+const ALERTAS = [
+  { ico: '📧', nivel: 1, corto: 'Correo sospechoso',
+    texto: `120 empleados recibieron un correo: 'Tu bono de fin de año está listo, haz clic aquí'.`,
+    leccion: `Phishing: correos falsos que imitan a la empresa para robar contraseñas.` },
+  { ico: '🔐', nivel: 1, corto: 'Intentos de contraseña',
+    texto: `Una cuenta tuvo 300 intentos fallidos de contraseña en 2 minutos.`,
+    leccion: `Un bot probando contraseñas una tras otra.` },
+  { ico: '📦', nivel: 1, corto: 'Descarga grande',
+    texto: `Una empleada de marketing descargó un archivo de 4 GB.`,
+    leccion: `Falsa alarma: eran videos de una campaña. La mayoría de las alertas son así.` },
+  { ico: '🦠', nivel: 2, corto: 'Programa extraño',
+    texto: `El antivirus detectó un programa extraño en el laptop de un vendedor.`,
+    leccion: `Malware: hay que aislar el equipo antes de que se propague.` },
+  { ico: '🌎', nivel: 1, corto: 'Acceso desde otro país',
+    texto: `Un ingeniero inició sesión desde otro país.`,
+    leccion: `No era un ataque: estaba de vacaciones. Un acceso desde otro lugar necesita contexto.` }
+];
+
+const MSG_AGENTE = `Socrates cerró la alerta en segundos. Nadie del equipo vio cómo lo hizo.`;
+const MSG_JUNIOR = `El junior revisó la alerta con ayuda del agente y aprendió a reconocer:`;
+const MSG_PENALIZACION = `Mientras tu equipo revisaba, otras alertas quedaron esperando`;
+const MSG_ESCALERA = `Los expertos de Nivel 3 aprendieron empezando en Nivel 1, revisando alertas simples. Si los agentes hacen todo ese trabajo, ¿dónde aprenderán los expertos del futuro?`;
+const MSG_PYME_ENTRADA = `Ahora eres el único encargado de seguridad de una pyme chilena de 30 personas. No hay presupuesto para agentes de IA. Los atacantes, en cambio, sí los usan.`;
+const MSG_PYME_FINAL = `Esto no es ficción. Entre diciembre de 2025 y febrero de 2026, un atacante usó agentes de IA para vulnerar agencias del gobierno de México y acceder a millones de registros de ciudadanos (según Gambit Security).`;
+const MSG_PYME_FINAL_2 = `Carvana puede defenderse con agentes. Una pyme, no.`;
+
+/* =====================================================================
+   MOTOR
+   ===================================================================== */
+const B = BALANCE;
+const $ = (s, root = document) => root.querySelector(s);
+const stage = $('#stage');
+const clockEl = $('#clock');
+const phaseEl = $('#phase');
+const metersEl = $('#meters');
+
+// ?vel=10 acelera todo el juego (solo para probar los tiempos rápido)
+const VEL = Math.max(1, Number(new URLSearchParams(location.search).get('vel')) || 1);
+const now = () => performance.now() * VEL;
+
+// Temporizadores del flujo actual (se limpian al cambiar de pantalla)
+let flow = [];
+function later(fn, ms) { const id = setTimeout(fn, ms / VEL); flow.push(id); return id; }
+function every(fn, ms) { const id = setInterval(fn, ms); flow.push(id); return id; }
+function clearFlow() { flow.forEach(id => { clearTimeout(id); clearInterval(id); }); flow = []; }
+
+let S;            // estado de la partida
+let clockId = null;
+let renderId = 0; // evita dobles clics / acciones de pantallas viejas
+
+function freshState() {
+  return {
+    screen: 'portada', startAt: null,
+    tiempo: 0, costo: 0, exp: 0,
+    decisiones: [], ambigua: null, pyme: null,
+    penalizado: false, porTiempo: false
+  };
+}
+
+function render(html, screen, phase) {
+  renderId++;
+  S.screen = screen;
+  if (phase) phaseEl.textContent = phase;
+  stage.innerHTML = html;
+  window.scrollTo(0, 0);
+}
+
+// Asocia un botón [data-key] a una acción que se ejecuta una sola vez por pantalla
+function bind(key, fn) {
+  const el = stage.querySelector(`[data-key="${key}"]`);
+  if (!el) return;
+  const id = renderId;
+  el.addEventListener('click', () => { if (id !== renderId) return; renderId++; fn(); });
+}
+
+// Avance automático con barra de progreso en el botón "Siguiente"
+function autoNext(seg, fn) {
+  const id = renderId;
+  const bar = stage.querySelector('[data-key="next"] .auto');
+  if (bar) bar.style.animationDuration = (seg / VEL) + 's';
+  bind('next', fn);
+  later(() => { if (id !== renderId) return; renderId++; fn(); }, seg * 1000);
+}
+
+const nextBtn = (label) => `<button class="btn next" data-key="next">${label}<span class="auto"></span></button>`;
+
+/* ---------- Reloj global ---------- */
+function fmtClock(sec) {
+  const s = Math.max(0, Math.ceil(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+function renderClock(rem) {
+  clockEl.textContent = fmtClock(rem);
+  clockEl.classList.toggle('warn', rem <= 90 && rem > B.CORTE_CIERRE_SEG);
+  clockEl.classList.toggle('danger', rem <= B.CORTE_CIERRE_SEG);
+}
+function tick() {
+  const rem = B.DURACION_TOTAL_SEG - (now() - S.startAt) / 1000;
+  renderClock(rem);
+  if (rem <= B.CORTE_CIERRE_SEG && S.screen !== 'cierre') {
+    S.porTiempo = true;
+    cierre();
+  }
+  if (rem <= 0) { clearInterval(clockId); clockId = null; }
+}
+
+/* ---------- Medidores ---------- */
+function fmtMin(m) {
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? `${h} h ${r} min` : `${h} h`;
+}
+function tween(el, from, to, fmt) {
+  const t0 = performance.now(), dur = 700;
+  const step = (t) => {
+    const p = Math.min(1, (t - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(Math.round(from + (to - from) * e));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function flash(meterId, text) {
+  const m = $(meterId);
+  m.classList.remove('bump'); void m.offsetWidth; m.classList.add('bump');
+  const d = document.createElement('span');
+  d.className = 'delta'; d.textContent = text;
+  m.appendChild(d);
+  setTimeout(() => d.remove(), 1500);
+}
+function aplicar({ tiempo = 0, costo = 0, exp = 0 }) {
+  const prev = { tiempo: S.tiempo, costo: S.costo, exp: S.exp };
+  S.tiempo += tiempo;
+  S.costo += costo;
+  S.exp = Math.min(B.EXP_MAX, S.exp + exp);
+  if (S.tiempo !== prev.tiempo) { tween($('#m-tiempo .m-val'), prev.tiempo, S.tiempo, fmtMin); flash('#m-tiempo', `+${tiempo}`); }
+  if (S.costo !== prev.costo) { tween($('#m-costo .m-val'), prev.costo, S.costo, v => `$${v}`); flash('#m-costo', `+$${costo}`); }
+  if (S.exp !== prev.exp) { tween($('#m-exp .m-val'), prev.exp, S.exp, v => `${v}`); flash('#m-exp', `+${S.exp - prev.exp}`); }
+  $('#m-exp .m-bar i').style.width = (S.exp / B.EXP_MAX * 100) + '%';
+}
+function resetMeters() {
+  $('#m-tiempo .m-val').textContent = '0 min';
+  $('#m-costo .m-val').textContent = '$0';
+  $('#m-exp .m-val').textContent = '0';
+  $('#m-exp .m-bar i').style.width = '0';
+}
+
+/* ---------- Sonido y vibración (opcionales) ---------- */
+let actx = null;
+function initAudio() {
+  if (!B.SONIDO) return;
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+  } catch (e) { actx = null; }
+}
+function alarma() {
+  const tocado = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  const esTactil = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  if (B.VIBRACION && navigator.vibrate && tocado && esTactil) { try { navigator.vibrate([200, 100, 200]); } catch (e) {} }
+  if (!actx) return;
+  try {
+    const t = actx.currentTime;
+    [0, 0.4].forEach(d => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'square';
+      o.frequency.setValueAtTime(880, t + d);
+      o.frequency.linearRampToValueAtTime(440, t + d + 0.3);
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(0.05, t + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.32);
+      o.connect(g).connect(actx.destination);
+      o.start(t + d); o.stop(t + d + 0.34);
+    });
+  } catch (e) {}
+}
+
+/* ---------- Minicontador de cada alerta ---------- */
+function startMini(onTimeout) {
+  const total = B.MINICONTADOR_SEG * 1000;
+  const fin = now() + total;
+  const label = $('#mini'), bar = $('#minibar');
+  const update = () => {
+    const rem = Math.max(0, fin - now());
+    const s = Math.ceil(rem / 1000);
+    label.textContent = `${s} s`;
+    bar.style.width = (rem / total * 100) + '%';
+    const cls = s <= 5 ? 'danger' : s <= 10 ? 'warn' : '';
+    label.className = 'mini ' + cls;
+    bar.className = cls;
+  };
+  update();
+  every(update, 100);
+  const id = renderId;
+  later(() => { if (id !== renderId) return; renderId++; onTimeout(); }, total);
+}
+
+const optBtn = (key, ico, titulo, sub, desc) => `
+  <button class="opt" data-key="${key}">
+    <span class="opt-ico">${ico}</span>
+    <span class="opt-main"><span class="opt-title">${titulo}</span>${desc ? `<span class="opt-desc">${desc}</span>` : ''}${sub ? `<span class="opt-sub">${sub}</span>` : ''}</span>
+    <kbd>${key}</kbd>
+  </button>`;
+const efectos = e => `⏱ +${e.tiempo} min · 💰 +$${e.costo} · 🎓 +${e.exp}`;
+
+/* =====================================================================
+   PANTALLAS
+   ===================================================================== */
+function portada() {
+  clearFlow();
+  document.body.classList.remove('alarm');
+  metersEl.hidden = true;
+  render(`
+    <section class="screen center">
+      <div class="radar" aria-hidden="true"></div>
+      <div class="kicker">Centro de seguridad · Turno de noche</div>
+      <h1 class="title">${NOMBRE_JUEGO}</h1>
+      <p class="lead">Eres el jefe de seguridad de Carvana. Tienes 5 minutos.</p>
+      <button class="btn primary" data-key="next">Empezar</button>
+    </section>`, 'portada', 'Inicio');
+  bind('next', empezar);
+}
+
+function empezar() {
+  initAudio();
+  S.startAt = now();
+  if (clockId) clearInterval(clockId);
+  clockId = setInterval(tick, 200);
+  tick();
+  intro(0);
+}
+
+function intro(i) {
+  clearFlow();
+  const p = INTRO[i];
+  const dots = INTRO.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('');
+  render(`
+    <section class="screen">
+      <div class="step-label">Antes de empezar · ${i + 1} de ${INTRO.length}</div>
+      <article class="card intro-card pop">
+        <div class="intro-ico">${p.ico}</div>
+        <h2>${p.titulo}</h2>
+        ${p.html}
+      </article>
+      <div class="dots">${dots}</div>
+      ${nextBtn(i < INTRO.length - 1 ? 'Siguiente ›' : 'Empezar el turno ›')}
+    </section>`, 'intro', 'Intro');
+  autoNext(B.INTRO_AUTO_SEG, () => (i < INTRO.length - 1 ? intro(i + 1) : acto1()));
+}
+
+/* ---------- Acto 1 ---------- */
+function acto1() {
+  clearFlow();
+  metersEl.hidden = false;
+  render(`
+    <section class="screen">
+      <div class="step-label">Acto 1 · Carvana</div>
+      <article class="card pop">
+        <h2 style="text-align:center">${EQUIPO_TITULO}</h2>
+        <div class="team">
+          <div class="member"><span class="member-ico">🤖</span><p>${EQUIPO_AGENTE}</p></div>
+          <div class="member"><span class="member-ico">👩‍💻</span><p>${EQUIPO_JUNIOR}</p></div>
+        </div>
+        <p class="team-close">${EQUIPO_CIERRE}</p>
+        <p class="team-hint">${EQUIPO_PISTA}</p>
+      </article>
+      ${nextBtn('Ver la primera alerta ›')}
+    </section>`, 'acto1', 'Acto 1 · Carvana');
+  autoNext(B.EQUIPO_SEG, () => mostrarAlerta(0));
+}
+
+function mostrarAlerta(i) {
+  clearFlow();
+  const a = ALERTAS[i];
+  render(`
+    <section class="screen">
+      <div class="step-label">Acto 1 · Carvana — Alerta ${i + 1} de ${ALERTAS.length}</div>
+      <article class="card pop">
+        <div class="alert-top">
+          <span class="badge n${a.nivel}">Nivel ${a.nivel}</span>
+          <span class="mini" id="mini"></span>
+        </div>
+        <div class="alert-ico">${a.ico}</div>
+        <p class="alert-text">${a.texto}</p>
+        <div class="minibar"><i id="minibar"></i></div>
+      </article>
+      <p class="ask">¿Quién la resuelve?</p>
+      <div class="opts two">
+        ${optBtn('1', '🤖', 'Agente IA', efectos(B.AGENTE), DESC_AGENTE)}
+        ${optBtn('2', '👩‍💻', 'Junior + agente', efectos(B.JUNIOR), DESC_JUNIOR)}
+      </div>
+    </section>`, 'acto1', 'Acto 1 · Carvana');
+  bind('1', () => elegir(i, 'agente', false));
+  bind('2', () => elegir(i, 'junior', false));
+  startMini(() => elegir(i, 'agente', true));
+}
+
+function elegir(i, tipo, porEspera) {
+  clearFlow();
+  const a = ALERTAS[i];
+  const e = tipo === 'agente' ? B.AGENTE : B.JUNIOR;
+  const extra = porEspera ? B.ESPERA_SIN_DECIDIR_MIN : 0;
+  const expAntes = S.exp;
+  aplicar({ tiempo: e.tiempo + extra, costo: e.costo, exp: e.exp });
+  S.decisiones.push({ i, tipo, porEspera });
+
+  const esAgente = tipo === 'agente';
+  const pct = v => (v / B.EXP_MAX * 100) + '%';
+  const expHtml = `
+    <div class="exp-card">
+      <div class="exp-line"><span>🎓 Experiencia del junior</span><b>${esAgente ? S.exp : `${expAntes} → ${S.exp}`}</b></div>
+      <div class="exp-track"><i style="width:${pct(expAntes)}" data-to="${pct(S.exp)}"></i></div>
+      <small class="goal">┃ ${B.UMBRAL_EXP_AMBIGUA} = ${META_EXP}</small>
+      ${esAgente ? `<small>El junior no vio esta alerta.</small>` : ''}
+      ${!esAgente && expAntes < B.UMBRAL_EXP_AMBIGUA && S.exp >= B.UMBRAL_EXP_AMBIGUA ? `<p class="ready">${MSG_JUNIOR_LISTO}</p>` : ''}
+    </div>`;
+  render(`
+    <section class="screen">
+      <div class="step-label">Acto 1 · Carvana — Alerta ${i + 1} de ${ALERTAS.length}</div>
+      <article class="card feedback ${tipo} pop">
+        ${porEspera ? `<p class="wait">⏳ La alerta quedó esperando (+${extra} min) y la resolvió el agente.</p>` : ''}
+        <div class="fb-head">${esAgente ? '🤖' : '👩‍💻'} <span>${esAgente ? 'Agente IA' : 'Junior + agente'}</span></div>
+        <p class="fb-msg">${esAgente ? MSG_AGENTE : MSG_JUNIOR}</p>
+        <div class="lesson"><span class="lesson-label">${esAgente ? 'Lo que era' : 'Lección'}</span>${a.ico} ${a.leccion}</div>
+        ${expHtml}
+      </article>
+      ${nextBtn('Siguiente ›')}
+    </section>`, 'acto1', 'Acto 1 · Carvana');
+  const barra = stage.querySelector('.exp-track i');
+  requestAnimationFrame(() => requestAnimationFrame(() => { barra.style.width = barra.dataset.to; }));
+  autoNext(porEspera ? B.TARJETA_SIN_DECIDIR_SEG : B.TARJETA_SEG,
+           () => (i + 1 < ALERTAS.length ? mostrarAlerta(i + 1) : finActo1()));
+}
+
+function finActo1() {
+  clearFlow();
+  const juniors = S.decisiones.filter(d => d.tipo === 'junior').length;
+  if (juniors >= B.PENALIZACION_DESDE_JUNIOR) {
+    S.penalizado = true;
+    aplicar({ tiempo: B.PENALIZACION_TIEMPO_MIN });
+    render(`
+      <section class="screen">
+        <div class="step-label">Fin del Acto 1</div>
+        <article class="card feedback warnc pop">
+          <div class="fb-head">⏳</div>
+          <p class="fb-msg">${MSG_PENALIZACION}</p>
+          <div class="big-num">⏱ +${B.PENALIZACION_TIEMPO_MIN} min</div>
+        </article>
+        ${nextBtn('Siguiente ›')}
+      </section>`, 'acto1', 'Acto 1 · Carvana');
+    autoNext(B.PENALIZACION_SEG, ambigua);
+  } else {
+    ambigua();
+  }
+}
+
+/* ---------- La alerta ambigua ---------- */
+function ambigua() {
+  clearFlow();
+  document.body.classList.add('alarm');
+  alarma();
+  render(`
+    <section class="screen">
+      <div class="step-label">Alerta sin clasificar</div>
+      <article class="card ambig-card shake">
+        <div class="alert-top">
+          <span class="badge red">🚨 Alerta</span>
+          <span class="mini" id="mini"></span>
+        </div>
+        <p class="ambig-text"><span class="hora">🚨 3:12 AM.</span> Un ingeniero de Carvana inicia sesión desde Brasil y empieza a descargar la base de datos completa de clientes.</p>
+        <div class="socrates">🤖 Socrates: "Confianza 52%. No puedo clasificar esta alerta."</div>
+        <div class="minibar"><i id="minibar"></i></div>
+      </article>
+      <div class="opts three">
+        ${optBtn('1', '🤖', 'Dejar que decida el agente', '')}
+        ${optBtn('2', '👩‍💻', 'Enviar al equipo junior', `🎓 Experiencia: ${S.exp}`)}
+        ${optBtn('3', '👩‍🦳', 'Despertar a la analista senior', '')}
+      </div>
+    </section>`, 'ambigua', 'Alerta ambigua');
+  bind('1', () => resolverAmbigua('agente', false));
+  bind('2', () => resolverAmbigua('junior', false));
+  bind('3', () => resolverAmbigua('senior', false));
+  startMini(() => resolverAmbigua('agente', true));
+}
+
+function resolverAmbigua(tipo, porEspera) {
+  clearFlow();
+  let r;
+  if (tipo === 'agente') {
+    r = { clase: 'bad', ico: '🤖', titulo: 'Datos de clientes expuestos',
+          texto: `El agente la clasifica como "acceso normal", igual que la alerta 5.`, ...B.AMBIGUA.agente };
+  } else if (tipo === 'junior' && S.exp >= B.UMBRAL_EXP_AMBIGUA) {
+    r = { clase: 'good', ico: '👩‍💻', titulo: 'Ataque contenido',
+          texto: `El junior nota la diferencia con la alerta 5 (la hora y la descarga masiva) y bloquea la cuenta.`,
+          extra: MSG_AMBIG_JUNIOR_BIEN, extraClase: 'extra-good', ...B.AMBIGUA.juniorBien };
+  } else if (tipo === 'junior') {
+    r = { clase: 'warnc', ico: '👩‍💻', titulo: 'Datos parcialmente expuestos',
+          texto: `"Tu junior nunca había revisado una alerta real. Duda y escala tarde."`,
+          extra: msgAmbigJuniorMal(S.exp, B.UMBRAL_EXP_AMBIGUA), ...B.AMBIGUA.juniorMal };
+  } else {
+    r = { clase: 'warnc', ico: '👩‍🦳', titulo: 'La analista senior la resuelve',
+          texto: `La resuelve, pero tarda: estaba durmiendo y es la única que sabe hacerlo.`,
+          extra: `Solo una persona en tu equipo sabe hacer esto. ¿Qué pasa cuando se vaya?`, ...B.AMBIGUA.senior };
+  }
+  const espera = porEspera ? B.ESPERA_SIN_DECIDIR_MIN : 0;
+  aplicar({ tiempo: r.tiempo + espera, costo: r.costo });
+  S.ambigua = { tipo, titulo: r.titulo, clase: r.clase };
+
+  render(`
+    <section class="screen">
+      <div class="step-label">Resultado de la alerta</div>
+      <article class="card feedback ${r.clase} pop">
+        ${porEspera ? `<p class="wait">⏳ Nadie decidió (+${espera} min) y la resolvió el agente.</p>` : ''}
+        <div class="fb-head">${r.ico}</div>
+        <div class="result-title ${r.clase}">${r.titulo}</div>
+        <p class="fb-msg">${r.texto}</p>
+        ${r.extra ? `<p class="${r.extraClase || 'senior-q'}">${r.extra}</p>` : ''}
+        <div class="big-num">⏱ +${r.tiempo} min${r.costo ? ` · 💰 +$${r.costo}` : ''}</div>
+      </article>
+      ${nextBtn('Siguiente ›')}
+    </section>`, 'ambigua', 'Alerta ambigua');
+  autoNext(B.AMBIGUA_RESULTADO_SEG, escalera);
+}
+
+function escalera() {
+  clearFlow();
+  render(`
+    <section class="screen">
+      <div class="step-label">La escalera rota</div>
+      <article class="card pop">
+        <div class="intro-ico">🪜</div>
+        <p class="quote">${MSG_ESCALERA}</p>
+      </article>
+      ${nextBtn('Siguiente ›')}
+    </section>`, 'ambigua', 'Alerta ambigua');
+  autoNext(B.ESCALERA_SEG, pymeEntrada);
+}
+
+/* ---------- Acto 2: pyme ---------- */
+function pymeEntrada() {
+  clearFlow();
+  document.body.classList.remove('alarm');
+  metersEl.hidden = true;
+  render(`
+    <section class="screen">
+      <div class="step-label">Acto 2 · Ahora eres una pyme</div>
+      <article class="card pop">
+        <div class="intro-ico">🏢</div>
+        <p class="quote">${MSG_PYME_ENTRADA}</p>
+        <p class="hint">Toca cada alerta para revisarla. Cada revisión toma ${B.PYME_REVISION_SEG} segundos.</p>
+      </article>
+      ${nextBtn('Empezar ›')}
+    </section>`, 'pyme', 'Acto 2 · Pyme');
+  autoNext(B.PYME_ENTRADA_SEG, pymeJuego);
+}
+
+function pymeJuego() {
+  clearFlow();
+  render(`
+    <section class="screen">
+      <div class="pyme-hud">
+        <div class="hud-box good"><span id="rev">0</span><small>Revisadas</small></div>
+        <div class="hud-box timer"><span id="pt">0:${String(B.PYME_DURACION_SEG).padStart(2, '0')}</span><small>Tiempo</small></div>
+        <div class="hud-box bad"><span id="sin">0</span><small>Sin revisar</small></div>
+      </div>
+      <p class="hint">Toca una alerta para revisarla.</p>
+      <div class="tray" id="tray" aria-live="off"></div>
+    </section>`, 'pyme', 'Acto 2 · Pyme');
+
+  const tray = $('#tray'), revEl = $('#rev'), sinEl = $('#sin'), ptEl = $('#pt');
+  const id = renderId;
+  let revisadas = 0, n = 0, ocupada = false;
+  let intervalo = B.PYME_INTERVALO_INICIAL_SEG * 1000;
+  const fin = now() + B.PYME_DURACION_SEG * 1000;
+
+  const pendientes = () => tray.querySelectorAll('.tray-item').length;
+  const actualizar = () => {
+    const p = pendientes();
+    revEl.textContent = revisadas;
+    sinEl.textContent = p;
+    tray.classList.toggle('full', p >= 6);
+  };
+
+  const revisar = (item) => {
+    if (ocupada || id !== renderId) return;
+    ocupada = true;
+    tray.classList.add('busy');
+    item.classList.add('reviewing');
+    item.querySelector('small').textContent = 'Revisando…';
+    const prog = document.createElement('span');
+    prog.className = 'prog';
+    prog.style.animationDuration = (B.PYME_REVISION_SEG / VEL) + 's';
+    item.appendChild(prog);
+    later(() => {
+      item.remove();
+      revisadas++;
+      ocupada = false;
+      tray.classList.remove('busy');
+      actualizar();
+    }, B.PYME_REVISION_SEG * 1000);
+  };
+
+  const nueva = () => {
+    n++;
+    const a = ALERTAS[(n - 1) % ALERTAS.length];
+    const item = document.createElement('button');
+    item.className = 'tray-item';
+    item.innerHTML = `<span class="t-ico">${a.ico}</span><span class="t-txt"><b>${a.corto}</b><small>Alerta #${n}</small></span>`;
+    item.addEventListener('click', () => revisar(item));
+    tray.prepend(item);
+    actualizar();
+    intervalo = Math.max(B.PYME_INTERVALO_MIN_SEG * 1000, intervalo * B.PYME_ACELERACION);
+    later(nueva, intervalo);
+  };
+
+  every(() => { ptEl.textContent = fmtClock((fin - now()) / 1000); }, 100);
+  later(() => {
+    if (id !== renderId) return;
+    S.pyme = { revisadas, sin: pendientes(), total: n };
+    pymeFinal();
+  }, B.PYME_DURACION_SEG * 1000);
+  nueva();
+}
+
+function pymeFinal() {
+  clearFlow();
+  const p = S.pyme;
+  render(`
+    <section class="screen">
+      <div class="step-label">Fin del Acto 2</div>
+      <article class="card pop">
+        <div class="pyme-result">
+          <span><b class="g">${p.revisadas}</b> revisadas</span>
+          <span><b class="r">${p.sin}</b> sin revisar</span>
+        </div>
+        <p class="fb-msg">${MSG_PYME_FINAL}</p>
+        <p class="strong">${MSG_PYME_FINAL_2}</p>
+      </article>
+      ${nextBtn('Ver el cierre ›')}
+    </section>`, 'pyme', 'Acto 2 · Pyme');
+  autoNext(B.PYME_MENSAJE_SEG, cierre);
+}
+
+/* ---------- Cierre ---------- */
+function cierre() {
+  clearFlow();
+  document.body.classList.remove('alarm');
+  metersEl.hidden = true;
+
+  const juniors = S.decisiones.filter(d => d.tipo === 'junior').length;
+  let camino, etiqueta;
+  if (juniors <= B.CAMINO_TODO_MAX) { camino = 'todo'; etiqueta = 'Automatizaste todo'; }
+  else if (juniors <= B.CAMINO_EQUILIBRIO_MAX) { camino = 'equilibrio'; etiqueta = 'Buscaste un equilibrio'; }
+  else { camino = 'personas'; etiqueta = 'Confiaste en las personas'; }
+
+  const decisiones = ALERTAS.map((a, k) => {
+    const d = S.decisiones.find(x => x.i === k);
+    const que = !d ? '—' : d.porEspera ? '⏳🤖' : d.tipo === 'agente' ? '🤖' : '👩‍💻';
+    return `<span class="decision" title="Alerta ${k + 1}">${a.ico} ${que}</span>`;
+  }).join('');
+
+  // Línea que conecta la experiencia del junior con lo que pasó en la alerta ambigua
+  let linea = '';
+  if (S.ambigua) {
+    const listo = S.exp >= B.UMBRAL_EXP_AMBIGUA;
+    if (listo && S.ambigua.tipo === 'junior') linea = `<p class="cierre-line good">${MSG_CIERRE_LISTO_USADO}</p>`;
+    else if (listo) linea = `<p class="cierre-line">${MSG_CIERRE_LISTO_SIN_USAR}</p>`;
+    else if (B.JUNIOR.exp > 0) linea = `<p class="cierre-line">${msgCierreFaltan(Math.ceil((B.UMBRAL_EXP_AMBIGUA - S.exp) / B.JUNIOR.exp))}</p>`;
+  }
+
+  const amb = S.ambigua
+    ? `<b class="txt ${S.ambigua.clase}">${S.ambigua.titulo}</b>`
+    : `<b class="txt">No alcanzaste a llegar</b>`;
+  const pyme = S.pyme
+    ? `<b class="txt"><span style="color:var(--green)">${S.pyme.revisadas} revisadas</span> · <span style="color:var(--red)">${S.pyme.sin} sin revisar</span></b>`
+    : `<b class="txt">No alcanzaste a llegar</b>`;
+
+  render(`
+    <section class="screen closing">
+      ${S.porTiempo ? `<div class="timeout-banner">⏰ Se acabó el tiempo del turno: saltaste directo al cierre.</div>` : ''}
+
+      <article class="card pop">
+        <h2>Tu turno</h2>
+        <span class="path-tag ${camino}">${etiqueta}</span>
+        <p>${TEXTOS_CAMINO[camino]}</p>
+        ${linea}
+        <div class="stats">
+          <div class="stat"><small>⏱ Tiempo de respuesta total</small><b>${fmtMin(S.tiempo)}</b></div>
+          <div class="stat"><small>💰 Costo del turno</small><b>$${S.costo}</b></div>
+          <div class="stat"><small>🎓 Experiencia del junior</small><b>${S.exp} / ${B.EXP_MAX}</b></div>
+          <div class="stat wide"><small>🚨 Alerta ambigua</small>${amb}</div>
+          <div class="stat wide"><small>🏢 Acto 2 (pyme)</small>${pyme}</div>
+          <div class="stat wide"><small>Tus decisiones (🤖 agente · 👩‍💻 junior)</small><div class="decisions">${decisiones}</div></div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Lo que pasa en la vida real</h2>
+        <ul class="real-list">
+          <li>Según Carvana, el agente de Torq clasifica el 100% de sus alertas de Nivel 1 y Nivel 2.</li>
+          <li>Según Torq, el equipo opera con la efectividad de un SOC cinco veces más grande.</li>
+          <li>Según Deloitte, la inversión en IA se reparte 93% en tecnología y 7% en personas.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Mi postura</h2>
+        <blockquote>${MI_POSTURA}</blockquote>
+        <div class="author">— ${AUTOR}</div>
+      </article>
+
+      <article class="card">
+        <h2>La pregunta que me queda</h2>
+        <blockquote>${MI_PREGUNTA}</blockquote>
+      </article>
+
+      <p class="sources">Fuentes: Deloitte Tech Trends 2026, Torq, Mobile World Live y Live Science.</p>
+
+      <button class="btn primary" data-key="next" style="align-self:center">↻ Volver a jugar</button>
+    </section>`, 'cierre', 'Cierre');
+  bind('next', reiniciar);
+}
+
+function reiniciar() {
+  clearFlow();
+  if (clockId) { clearInterval(clockId); clockId = null; }
+  S = freshState();
+  resetMeters();
+  renderClock(B.DURACION_TOTAL_SEG);
+  portada();
+}
+
+/* ---------- Teclado (computador): 1/2/3 para elegir, Enter para seguir ---------- */
+document.addEventListener('keydown', (e) => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  let sel = null;
+  if (['1', '2', '3'].includes(e.key)) sel = `[data-key="${e.key}"]`;
+  else if (e.key === 'Enter' || e.key === ' ') {
+    const a = document.activeElement;
+    if (a && a.tagName === 'BUTTON' && stage.contains(a)) return; // el botón enfocado ya responde solo
+    sel = '[data-key="next"]';
+  }
+  if (!sel) return;
+  const b = stage.querySelector(sel);
+  if (b) { e.preventDefault(); b.click(); }
+});
+
+document.documentElement.style.setProperty('--umbral', (B.UMBRAL_EXP_AMBIGUA / B.EXP_MAX * 100) + '%');
+reiniciar();
+</script>
+</body>
+</html>
